@@ -1,0 +1,62 @@
+Retrying.
+
+--2017-04-22 00:03:34--  (try: 6)  http://52.80.90.45:8080/wiki/Main_Page
+Connecting to 52.80.90.45:8080... failed: Connection timed out.
+Retrying.
+
+--2017-04-22 00:05:47--  (try: 7)  http://52.80.90.45:8080/wiki/Main_Page
+Connecting to 52.80.90.45:8080... failed: Connection timed out.
+Retrying.
+
+--2017-04-22 00:08:01--  (try: 8)  http://52.80.90.45:8080/wiki/Main_Page
+Connecting to 52.80.90.45:8080... failed: Connection timed out.
+Retrying.
+
+--2017-04-22 00:10:16--  (try: 9)  http://52.80.90.45:8080/wiki/Main_Page
+Connecting to 52.80.90.45:8080... failed: Connection timed out.
+Retrying.
+
+--2017-04-22 00:12:33--  (try:10)  http://52.80.90.45:8080/wiki/Main_Page
+Connecting to 52.80.90.45:8080... failed: Connection timed out.
+Retrying.
+
+--2017-04-22 00:14:50--  (try:11)  http://52.80.90.45:8080/wiki/Main_Page
+Connecting to 52.80.90.45:8080... failed: Connection timed out.
+Retrying.
+
+--2017-04-22 00:17:07--  (try:12)  http://52.80.90.45:8080/wiki/Main_Page
+Connecting to 52.80.90.45:8080... failed: Connection timed out.
+Retrying.
+
+--2017-04-22 00:19:24--  (try:13)  http://52.80.90.45:8080/wiki/Main_Page
+Connecting to 52.80.90.45:8080... failed: Connection timed out.
+Retrying.
+
+--2017-04-22 00:21:42--  (try:14)  http://52.80.90.45:8080/wiki/Main_Page
+Connecting to 52.80.90.45:8080... failed: Connection timed out.
+Retrying.
+
+--2017-04-22 00:23:59--  (try:15)  http://52.80.90.45:8080/wiki/Main_Page
+Connecting to 52.80.90.45:8080... failed: Connection timed out.
+Retrying.
+
+--2017-04-22 00:26:16--  (try:16)  http://52.80.90.45:8080/wiki/Main_Page
+Connecting to 52.80.90.45:8080... failed: Connection timed out.
+Retrying.
+
+--2017-04-22 00:28:33--  (try:17)  http://52.80.90.45:8080/wiki/Main_Page
+Connecting to 52.80.90.45:8080... failed: Connection timed out.
+Retrying.
+
+--2017-04-22 00:30:50--  (try:18)  http://52.80.90.45:8080/wiki/Main_Page
+Connecting to 52.80.90.45:8080... failed: Connection timed out.
+Retrying.
+
+--2017-04-22 00:33:08--  (try:19)  http://52.80.90.45:8080/wiki/Main_Page
+Connecting to 52.80.90.45:8080... failed: Connection timed out.
+Retrying.
+
+--2017-04-22 00:35:25--  (try:20)  http://52.80.90.45:8080/wiki/Main_Page
+Connecting to 52.80.90.45:8080... failed: Connection timed out.
+Giving up.
+

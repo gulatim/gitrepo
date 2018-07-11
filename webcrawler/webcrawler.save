@@ -1,0 +1,124 @@
+#!/usr/bin/env python
+
+import socket,re,argparse
+from urlparse import urlparse
+
+#Creating a TCP scoket
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.connect(("cs5700sp17.ccs.neu.edu",80))
+
+#Parsing command line arguements
+parser = argparse.ArgumentParser()
+parser.add_argument('username',help='Enter the user name')
+parser.add_argument('creds',help='Enter the password')
+args = parser.parse_args()
+username=args.username
+password=args.creds
+
+
+#Variables
+loginURL="/accounts/login/?next=/fakebook/"
+url="/fakebook/"
+visited=[]
+notvisited=[]
+flag=[]
+list_ref=[]
+
+
+#Function to login and retrive the session id in order to crawl the website
+def login(url):
+	rootget = "GET / HTTP/1.1\r\nHost: cs5700sp17.ccs.neu.edu\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; WOW64; rv:51.0) Gecko/20100101 Firefox/51.0\r\n Accept: text/html, application/xhtml+xml ,application/xml;q=0.9,*/*;q=0.8\r\nConnection:keep-alive Accept-Encoding: gzip, deflate Accept-Language: en-US.en;q=0.5\r\n\r\n" 
+	s.send(rootget)
+	requestedURL=s.recv(4096)
+	login = "GET "+loginURL+" HTTP/1.1\r\nHost: cs5700sp17.ccs.neu.edu\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; WOW64;  rv:51.0) Gecko/20100101 Firefox/51.0\r\n Accept: text/html, application/xhtml+xml ,application/xml;q=0.9,*/*;q=0.8\r\nConnection:keep-alive Accept-Encoding: gzip, deflate Accept-Language: en-US.en;q=0.5\r\n\r\n"
+	s.send(login)
+	requestedURL1=s.recv(4096)
+	cookieid=re.findall('csrftoken=(\w+)',requestedURL1)
+	sessionid= re.findall('sessionid=(\w+)',requestedURL1)
+	post="POST /accounts/login/ HTTP/1.1\r\nHost: cs5700sp17.ccs.neu.edu\r\nConnection: keep-alive\r\nContent-Length: 109\r\nContent-Type: application/x-www-form-urlencoded\r\nCookie: csrftoken="+cookieid[0]+"; sessionid="+sessionid[0]+"\r\n\r\nusername="+username+"&password="+password+"&csrfmiddlewaretoken="+cookieid[0]+"&next=%2Ffakebook%2F"
+	s.send(post)
+	code=s.recv(4096)
+#To check if  the credentials provided are correct as the server returns a 500 Internal error page when a incorrect credentails are provided
+	if ("HTTP/1.1 500" in code):
+		print("Invalid username or password")
+	sessionid1= re.findall('sessionid=(\w+)',code)
+	return sessionid1,cookieid
+     
+
+#Fuction to create a new socket and get the http response
+def data_extracter(url,sessionid):
+
+        soc=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        soc.connect(("cs5700sp17.ccs.neu.edu",80))
+        get = "GET "+url+" HTTP/1.1\r\nHost: cs5700sp17.ccs.neu.edu\r\nCookie:csrftoken="+cookieid[0]+";sessionid="+sessionid[0]+"\r\nConnection: keep-alive\r\n\r\n"
+        soc.send(get)
+        response=soc.recv(4096)
+        soc.close()
+        return response
+
+#Function to crawl over the web pages and also handle various error situations
+def loop(url,cookieid,sessionid,notvisited):
+
+        if url not in visited:
+                visited.append(url)
+                htmlpage=data_extracter(url,sessionid)
+
+# To retry the get request when ever a 500 Internal error is provided by the server
+                while ("HTTP/1.1 500" in htmlpage):
+                    htmlpage=data_extracter(url,sessionid)
+
+#To retrive the new location if the location of the page is moved
+                while ("HTTP/1.1 301" in htmlpage):
+                    header_301= htmlpage.split()
+                    for url in header_301:
+                        if "http://" in url :
+                                parsed=urlparse(url)
+
+                    htmlpage=data_extracter(parsed.path,sessionid)
+
+#Skips the URL if a 404 or 403 is observerd
+                if ("HTTP/1.1 404" in htmlpage):
+                    pass
+                elif ("HTTP/1.1 403" in htmlpage):
+                    print("403")
+                    pass
+
+#If 200 OK response is observed then retrives all the URLS of the fakebook domain 
+                elif ("HTTP/1.1 200" in htmlpage):
+                    Flag = re.findall('<h2 class=\'secret_flag\' style="color:red">FLAG: (\w+)',htmlpage)
+                    if (Flag != []):
+                        print(Flag[0])
+                        flag.append(Flag[0])
+                    list_ref=re.findall('<a.+?href="([^"]+)', htmlpage)
+                    for page in list_ref:
+                        if "/fakebook/" in page:
+                            if page not in visited:
+                                notvisited.append(page)
+
+
+try:
+#Login and retrive the session id
+	sessionid,cookieid=login(loginURL)
+
+#Loop through the home page and get the first list of frineds	
+	loop(url,cookieid,sessionid,notvisited)
+
+#Iterate through all the non-visited visited
+	for everyurl in notvisited :
+                loop(everyurl,cookieid,sessionid,notvisited)
+		if (len(flag)==5):
+			break
+except socket.gaierror:
+        print("The host is not reachable or unknown")
+except socket.error:
+        print("Unknown socket error occured")
+except IndexError:
+	print("Token/Session ID not extracted due or incorrect credentials provided, please recheck and retry")
+except KeyboardInterrupt:
+	print("\nTerminated by the user")
+finally:
+    s.close()
+
+
+
+

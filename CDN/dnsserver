@@ -1,0 +1,130 @@
+import socket,sys,struct,random,time,threading,subprocess,re,multiprocessing
+import signal,os,thread
+
+try:
+#To retrive the IP address of the server
+	sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM,0)			 
+	sock.connect(("david.choffnes.com",80))					
+	source_ip = sock.getsockname()[0]
+except:
+	print("An error occured retriving the IP address of the DNS Server,Exitting the application")
+	sys.exit()
+
+#Parsing Command Line arguements
+if len(sys.argv)==5 or sys.argv[1]=='-p' or sys.argv[3]=='-n' :                    
+	if int(sys.argv[2])>= 40001 and int(sys.argv[2])<65535:           
+		port = int(sys.argv[2])
+	else:
+		print "The port number of the DNS server should be between 40001 & 65535"
+		sys.exit()
+else:  
+	print "The arguements provided are invalid"
+	sys.exit()
+
+# Creating a socket 
+try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.bind((source_ip,port))
+except:
+        print("An error occured creating or binding a socket")
+	sys.exit()
+
+print("DNS Server has been started successfully.\nPress Crtl+'C' to stop the DNS Server or run the stop CDN script to stop the server ")
+# Get all the replica servers in a list 
+replicas = ('ec2-52-90-80-45.compute-1.amazonaws.com','ec2-54-183-23-203.us-west-1.compute.amazonaws.com','ec2-54-70-111-57.us-west-2.compute.amazonaws.com','ec2-52-215-87-82.eu-west-1.compute.amazonaws.com','ec2-52-28-249-79.eu-central-1.compute.amazonaws.com','ec2-54-169-10-54.ap-southeast-1.compute.amazonaws.com','ec2-52-62-198-57.ap-southeast-2.compute.amazonaws.com','ec2-52-192-64-163.ap-northeast-1.compute.amazonaws.com','ec2-54-233-152-60.sa-east-1.compute.amazonaws.com')
+try:
+	replicas = tuple(map(socket.gethostbyname, list(replicas))) #
+except:
+	print("Error occured while mapping replicas to IP address")
+def signal_handler(signum, frame):
+    print '\nSignal received exiting the application'
+    os._exit(1)
+
+# Function to perform active measurement
+def activemeasurement(replica,client,httpevent,event,lock,latency,s):
+	try:	
+		s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		s.connect((replica,63434)) # Connecting to HTTP servers through a predefined port to find the latency
+		s.send(client[0])
+		lat = s.recv(65000)
+		
+		lock.acquire()
+		latency[replica]=float(lat)
+		lock.release() 
+		s.close()
+		httpevent.wait()
+		event.set()
+	except:
+		print("Error occured while establishing communication between DNS and replica")
+
+global cache
+cache={}	# if IP is not in the cache, do the active measurements using the above function and find the best server to serve the client
+# Function to pack a DNS query to send to client
+def dns_pack(query,replicas,s,event,lock):
+	t=time.time()
+	client_ip=query[1]
+	if client_ip[0] in cache: # If the IP is present in cache, providing the same to the client
+		resolved_ip=cache[client_ip[0]]
+	else:	
+		latency={} 	#Dict is used to store different latencies per client
+		
+		httpevent=threading.Event()
+		a=0
+		for each_replica in replicas:
+			a+=1
+			soc='s'+str(a)
+			newthread=threading.Thread(target=activemeasurement,args=(each_replica,client_ip,httpevent,event,lock,latency,soc)) #Starting a newthread for each replica 
+			newthread.start()
+			
+	
+		httpevent.set()
+		event.wait()
+		newthread.join()
+		while len(latency)!=9:
+			if (time.time()>t+3): # Defining certain time to get the latency, or pass a default value and ignore the server
+				len_required=(9-len(latency))
+				for every in range(len_required):
+					latency[every]=95876	
+				
+			continue
+			
+		resolved_ip=min(latency, key=latency.get) 
+		if resolved_ip==0: 
+			resolved_ip='52.90.80.45'
+		print(latency)	
+		print("The following IP is resolved and given to client"+str(resolved_ip))	
+		cache[client_ip[0]]=resolved_ip
+	header = struct.unpack('!HHHHHH', query[0][:12]) 
+	domainname=''	      
+	question_start=12
+	count=ord(query[0][question_start])
+	while count!=0:                         
+		question_start=question_start+count+1
+		ref=count						#Domain name is extracted from the query
+		count=ord(query[0][question_start])
+		if count!=0:
+			domainname+=query[0][question_start-ref:question_start]+"."
+		else:
+			domainname+=query[0][question_start-ref:question_start]
+	
+	if domainname!=sys.argv[4]:# If the server requested is different, raising an exception
+		print("This server only resolves cs5700cdn.example.com")
+		sys.exit()
+	dns_response=struct.pack('!HHHHHH',header[0],0x8180,0x0001,0x0001,0,0)+query[0][12:question_start+5]+struct.pack('!HHHLH4s',0xC00C,0x0001,0x0001,5,4,socket.inet_aton(str(resolved_ip)))
+	s.sendto(dns_response,query[1]) # Respond to the client with the packed responce.
+	latency={}	
+	
+#Initializing signal Handlers	
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
+
+while True: 
+        try:                                                     
+		query = s.recvfrom(65000) # Recieveing the query from client
+		event=threading.Event()
+		lock=threading.Lock() 
+		t1 = threading.Thread(target=dns_pack,args=(query,replicas,s,event,lock)) # Creating a thread per client
+        	t1.start()
+	except:
+		print("An error occured while executing the program please try again")
+		os._exit(1)

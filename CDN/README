@@ -1,0 +1,80 @@
+Introduction:
+
+A CDN is implemented using Amazon EC2 instances with 9 HTTP replica server and one HTTP Origin server where replicas are located geographically across the globe and clients are to be redirected to the near replica based on lowest latency measured between the servers and the Clinet. We have used active measurement for calculating the latencies and find out which is the best replica for the client 
+
+High Level Approach:
+
+1) DNS server has been implemented which send the client ip to all the replica server to get the latency and based on the minimum latency the dns server resolves the replicas ip to the client.
+2) 2) A caching HTTP server has been implemented on all EC2 instances which check for the page in its cache. If the cache is not available replica contacts the Origin server and server the client along with storing in its cache, by doing so saves a copy of it in its cache for future use.
+3) In order to implement active measurement communication between Replicas and the DNS server has to take place on a separate port. 
+4) A multi-threaded environment has to be created in order to respond to multiple client simultaneously and collect the active measurement data asynchronously
+
+
+
+
+
+
+
+
+
+
+Step by step process:
+
+1) Client sends query to DNS server
+2) DNS server unpacks the query, extracts the host name and source IP address.
+3) DNS server initiates 9 threads and sends the client IP to the replicas over a TCP connection.
+4) All the replica servers ping to the client using Scamper, after getting the latencies it is sent to the DNS server.
+5) The DNS server chooses the server with the low latency. The answer is packed and resolved to the client. DNS caches the client ip with its best server in order to optimize the performance if the client queries back to server
+6) Client sends a web request to the replica server. 
+7) If the server has the cache of the requested webpage, it quickly responds with the copy of page.
+8) If the server has not cached or cached content is expired, HTTP server forwards the query to the origin server and gets the response.
+9) This response is sent to the client and as well as cached at the replica server.
+
+Details:
+
+DNS server:
+1) A thread has been initialized for every client and  where 9 sub threads are created and TCP connection is used to send the IP to the replica Server 
+2)The client reaches DNS server over a UDP connection
+3)The DNS server waits for the all replicas to send the latency value for a period of max 3 seconds.
+3)Once latencies are received the replica with min latency is identified and the DNS response is provided along with caching the response in the memory 
+4)This increases the performance drastically.
+
+Usage : ./dnsserver -p <port> -n <domainname>
+
+HTTP server and Caching:
+1) A TCP multithreaded connection has been created to respond to multiple http requests from different client
+2)On a separate thread a TCP connection is maintained with the DNS server for the active measurement communication
+2) Scamper tool is used to ping the client from all the replica servers to get the latencies, the decision making is done at DNS. 
+3) Once a http request is received cache using MYSQL has been implement where local cache is been checked first, if the content is not present its fetched from the origin server and response is sent to client. 
+4) For storing of cache, Database is created using SQLite and cached results are inserted into it. 
+5) As 10 MB of memory is allocated for a team. once the cache is full, the entries with minimum number of hits are deleted from the cache and the memory is made free for Later serving any clients. 
+6) The obtained result is cross checked with the output obtained WGET to verify the webpage obtained is not morphed due to any issues in code. The DIFF function in python showed no difference in the files
+
+Usage: ./httpserver -p <port> -o <origin>
+
+Triggers:
+
+1) All the above defined servers are deployed to EC2 instances and DNS server by DeployCDN script, this contains secure copy into specified server and SSH into it and assigning required permissions for the script copied earlier.
+2) The above copied scripts are run in this particular step, again we SSH into servers and issue a python command as showed above. this triggers the HTTP and DNS servers at specified locations.
+3) Now all the servers are up and running, Testing through Wget and DIG are done here.
+4) Inorder to stop the servers, We SSH into  servers and issue a kill command.
+	The syntax of these commands is:
+	
+	./[deploy|run|stop]CDN -p <port> -o <origin> -n <name> -u <username> -i <keyfile>
+
+Challenges:
+
+1) Although we had some experiences in struct of packets in previous project, DNS packets were challenging. the expected Answer format took some time.
+2) Maintaining of Database in the HTPP server was challenging, we had to start digging for the functioning of Databases from the scratch.
+3) As we implemented active measurements in selection of servers, we choose Latency as the criteria for selecting best node. This process took time to achieve.
+Asynchronous multi-threading gave a better result in this scenario.
+4)ICMP was blocked on the EC2 servers, so Active measurements were bit complex.
+5)UDP ports were blocked 
+
+Future Enhancements:
+
+If time permits we would have implemented the following to decrease the TTL for the client.
+1) Active measurements could have been still optimized with much deeper analysis into actual CDN functioning.
+2) The caching can be optimized and memory can be used to cache http response for optimized results
+
+

@@ -1,0 +1,12 @@
+#!/bin/bash
+if [ "$#" -gt 1 ]; then
+    echo "Program accepts only 1 arguement"
+
+elif [[ $1 == "" ]]
+then
+        echo "Program accepts 1 arguement as input"
+else
+
+        python rawhttpget.py $1
+
+fi

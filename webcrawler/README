@@ -1,0 +1,70 @@
+************************High Level Appraoch***********************
+1.Sockets module in Python is used and  a TCP  Socket is openned to connect to the server.
+2.argparse module in Python is used to parse the command line argument.
+	 [username] [password] 
+3.re module is used in oder to extract the the cookie,sessionid,link in the href
+4.urlparse module is used to extract the path of the moved location in case of 301 HTTP code.
+5.A TCP socket connection with port 80 is established and the scripts logs in to the webpage using the command line arguements provided.
+6.Crawling of web pages starts fromt he home page using the same sessionid and cookied id extracted after performing the login
+7.HTTP error codes such as 404 and 403 are handled where the connection tesminated and the crawler picks up the next un visited URL
+8.If a HTTP 500 appears on a url then the url is revisited util reponse is 200
+9.IF a HTTP 301 appears then the crawler tries visiting the move location.
+10.If a 200 HTTP code appears the crawler exracts all the links belonging to the same domain and stores them in an unvisited list 
+   and visits them sequentially
+11.The crawler traverses through thousands of pages until it recieves 5 hidden secret flags
+
+***********************CHallanges Faced***************************
+1.Creating  a POST request
+2.Handling the HTTP 500 response
+3.The server returns a empty sessionid if the crawler is rerun immediately so the programs throws a index error and this has been handled
+****************************Testing*******************************
+1.Test Case 1
+  If incorrect username or password is provided
+Result
+  Pass.
+Comments
+  If an incorrect username or password is provided client throws an exception saying "Invalid username or password provided and An unknown error occured please try again".
+
+2.Test Case 2
+  If the server is unreachable 
+Result
+  Pass
+Comments
+  If the server is not reachable the client throws an exception syaying "The host is not reachable or unknown".
+
+3.Test Case 3
+  If wrong port number is provided 
+Result
+  Pass
+Comments 
+  If a wrong  port number is provided then the client  throws saying "An unknown socket error has occured".
+
+4.Test Case 4
+  If a HTTP 500 Internal Server error occurs
+Result
+  Pass
+Comments
+  The crawlers visits the same URL until it recieves HTTP 200 or another HTTP code
+
+5.Test Case 5
+  If a HTTP 301 Permanently moved occurs
+Result
+  Pass
+Comments
+  The crawler extracts the new location of URL and adds it to the unvisited page
+
+6.Test Case 6
+  The server has to use the same sessionid while crawling through the pages
+Result
+  Pass
+Comments
+ The client uses the same sessionid and cookieid inorder to crawl
+
+7. Test Case 7
+  The program has to run successfully and provide five  secrert flags
+Result
+  Pass
+Comments
+  The program runs successfully and the secret flags are captured
+
+

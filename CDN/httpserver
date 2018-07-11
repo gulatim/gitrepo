@@ -1,0 +1,123 @@
+import socket
+import sys
+import struct
+import subprocess
+import requests
+import sqlite3
+import os,re,threading,signal,zlib
+# Starting a subprocess to take the IP address of the machine
+p = subprocess.Popen("ifconfig", stdout=subprocess.PIPE)
+resp = p.communicate()
+ipaddress=re.findall('inet addr:((\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}))',str(resp)) # Parsing the ifconfig output to get the IP address out
+source_ip=ipaddress[0][0]
+#print(source_ip)
+#Check the number of command line arguements 
+if len(sys.argv)==5 or sys.argv[1]=='-p' or sys.argv[3]=='-o' :
+        if int(sys.argv[2])>= 40000 and int(sys.argv[2])<65535:
+                port = int(sys.argv[2])
+        else:
+                print "The port number of the DNS server should be between 40000 & 65535"
+                sys.exit()
+else:
+        print "The arguements provided are invalid"
+        sys.exit() # Exception handling for incorrect port
+# Exception handling while creating and binding sockets
+#Creating a socket fo HTTP communication
+try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.bind((source_ip,port))
+except:
+        print("An error occured creating or binding a socket")
+        sys.exit()
+#Creating a socket for DNS_HTTP communcation
+try:
+        s1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s1.bind((source_ip,63434))
+except:
+        print("An error occured creating or binding a socket1")
+        sys.exit()
+
+def signal_handler(signum, frame): # If the User press exit command, the processes running are aborted
+    print 'Signal received exiting the application'
+    os._exit(1)
+
+global db_connect # Creating a database to store the cache of the web pages
+db_connect=sqlite3.connect('cache.db')
+db_connect.execute("CREATE TABLE IF NOT EXISTS CACHE (FILE CHAR(50) PRIMARY KEY,DATA TEXT NOT NULL,HIT INTEGER);")
+i=1
+# function to initialise Scamper tool to ping the client and get the latency
+def activereply(s):
+        while True:
+                s.listen(3)
+                con, addr = s.accept()
+                data = con.recvfrom(2048)
+
+                command= 'scamper -c "ping -c 1" -p 1 -i '+data[0] # Pings the client to check latency
+                #print(command)
+                result=subprocess.check_output(command, stderr=subprocess.STDOUT, shell=True)
+                #print(result)
+                result=result.split(" ")
+                if result[12].startswith("time"):
+                        latency=result[12][5:]
+			print(latency)
+                else:
+                        latency=98765
+
+                con.send(latency)
+                
+
+t2 = threading.Thread(target=activereply,args=(s1,))# Starting a thread to communicate to the host and get latency
+t2.start()
+#Function to perform HTTP Server capabilities with caching
+
+def httpserver(data,c,db_connect):
+        db_connect=sqlite3.connect('cache.db')
+        db_connect.execute("CREATE TABLE IF NOT EXISTS CACHE (FILE CHAR(50) PRIMARY KEY,DATA TEXT NOT NULL,HIT INTEGER);")
+        i=1
+        cursor=db_connect.cursor()
+        url=str(data[0].split()[1])
+        #print(url)
+        cursor.execute("SELECT DATA,HIT from CACHE where FILE=:link",{'link':url});# Reading the number of hits for the URL to maintain the DB
+        data = cursor.fetchone()
+        #print(data)
+        if data : #If data is in the cache, append the header and revert with the data. Later update the cache
+                print("Yes found in DB")
+                header='HTTP/1.0 200 OK'+'\n'+ 'Content-Type: text/html; charset=UTF-8'+'\n'+ 'Content-length: ' + str(len(data[0])) + '\n\n'
+                c.send(header+str(data[0]))
+                db_connect.execute("UPDATE CACHE SET HIT=:hit WHERE FILE=:file",{'hit':data[1]+1,'file':url})
+                db_connect.commit()
+        else : # If data is not in the cache, get the data from the origin server and serve the client. later update the cache.
+                print("Not in DB")
+                r = requests.get("http://"+sys.argv[4]+':8080' + url)
+                htmldata = r.text
+                htmldata = htmldata.encode('utf-8').strip() # Encoding the data in readable format
+                #print(htmldata)
+                header = 'HTTP/1.0 ' + str(r.status_code) + ' ' + r.reason + '\n'+ 'Content-Type: ' + r.headers['content-type'] + '\n'+ 'Content-length: ' + str(len(htmldata)) + '\n\n'
+                #print(header)
+                c.send(header + htmldata) # appending the header
+                print(os.path.getsize('cache.db'))
+                if os.path.getsize('cache.db')< 8912896: # Checking the cache size. if its under defined amount insert the cache
+                        db_connect.execute("INSERT INTO CACHE (FILE, DATA, HIT) VALUES ( ?, ?, ?)",(url, buffer(htmldata),i))#compress
+                        db_connect.commit()
+                else:
+                        hit_count = cursor.execute("SELECT MIN(HIT) from CACHE")
+                        min_hit_count = hit_count.fetchone()
+                        cursor.execute("DELETE FROM CACHE where HIT=:hit",{"hit":min_hit_count[0]}) # Delete the cache based on the number of counts
+                        db_connect.commit()
+                        print('deleting cache')
+                        db_connect.execute("INSERT INTO CACHE (FILE, DATA, HIT) VALUES ( ?, ?, ?)",(url, buffer(htmldata),i))
+                        db_connect.commit()
+#Initializing Signal Handlers
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
+
+while True:
+        try:
+                s.listen(2) 
+                c, addr = s.accept()
+                data = c.recvfrom(2048)
+                t1 = threading.Thread(target=httpserver,args=(data,c,db_connect)) 
+                t1.start()
+        except KeyboardInterrupt:
+                t1.join()
+                sys.exit(1)

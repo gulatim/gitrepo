@@ -1,0 +1,97 @@
+Introduction:
+
+1.	A TCP/IP Stack is implemented using Raw socket to download a file with necessary URL from the webserver and saves a copy in local hard disk.
+2.	Data from each TCP segment is written to a file and it is compared with the file directly downloaded using 'wget' and verified against the file downloaded from the program.
+3.	Packets of each layers are constructed and are sent to the destination with the help of raw sockets in which kernel TCP stack is bypassed where Ethernet, TCP, IP and HTTP packets are manually created with the specific field.
+
+High-Level approach:
+1	The url for which a http request should be performed is given as a command line argument to the program.
+2	Initially the URL is validated with the help of 'urlparse' and 're' module of python.
+3	Once the server and path in the server are identified the a to initiate a http request a TCP hand shake should be performed.
+4	A random port number and sequence number are generated to send the SYN Packet.
+6.      Once the server replies to the syn packet an acknowledgement along with the HTTP get request is sent.
+5	The server replied with and ack and starts sending the TCP segments with data.
+6.	We need to Ack every tcp segments or else the segments will be retransmitted.
+7.	Once all the segments are being sent the server sends a FIN ACK packet where requesting to close the connection.
+8.	An ACK packet is sent to the server following with a FIN packet to complete the 4-way closure.
+
+Creation and Unpacking of the TCP packets:
+ 
+1.	A TCP header is created with the all the fields in it using struct module as it provides the features of 'C' 
+2.	The checksum is considered to be zero in the initial stage. 
+3.	A pseudo header is created with the layer 3 details in it. 
+4.	The overall checksum is calculated by concatenating TCP header, pseudo header and data. 
+5.	The checksum field is later replaced with the calculated checksum. 
+6.	The authenticity of the incoming packets is checked by passing their headers into checksum function defined. If the packet is unbiased the checksum would provide the output as zero.
+7.	Similarly the packets are unpacked to extract details such ack number, seq number to create and validate future packets
+
+Creation and Unpacking of IP Packets: 
+1.	IP header is also created similar to TCP header by providing zero value in the checksum field with all its required fields where total length of the packet is given as the length of TCP+IP+Data
+2.	Checksum is calculated and is replaced in the checksum value in the initial formed IP header and packed it again in network understandable format.
+3.	The authenticity is calculated in the IP layer as well by passing the IP header to checksum function. If the packet is unbiased the checksum would provide the output as zero.
+4.	Similarly the packets are unpacked the verify whether the packets are destined to us or no
+
+Creation and Unpacking of HTTP Packets: 
+1.	HTTP header is created by providing the URL and the desired path corresponding to it. 
+2.	HTTP 1.0 is used and keeping the connection in “Keep-alive” mode.
+
+Creation and Unpacking of ETHERNET Packets [Extra Credit]:
+1.	To create an Ethernet frame to a destination we would be needing the MAC address of the default gateway 
+2.	An arp packet is created with a broadcast destination mac address and it is sent along with the Ethernet frame asking for the mac address of the default gateway
+4.	A arp reply is received from the default gateway with its MAC address
+5.	An Ethernet header is created with source mac and destination mac with necessary ethtype.
+
+Parsing the URL: 
+1.	URL parser is used to parse the URL which is a dynamical input taken from system arguments 
+2.	Parsed fields are used to validate the URL and the same are passed to the GET message and remaining program wherever required.
+
+Naming convention:
+The file created in the local hard disk is identical as in server. If it’s any HTML document, the name would be “index.html”, and if its end document or log file, the name would be taken as it is with the extension.
+
+Sockets are created with AF_Packet in order send layer2 frames.
+All the packets are framed together to from a TCP/IP stack and the packet is send to the server and the packets are unpacked in the same manner when received
+ethernet+ip+tcp+http(data)----------->Send packet structure
+data+tcp+ip+ethernet<-----------------Received Packet structure
+
+Low-Level approach:
+
+1.	The interface through which the packets are received is set to promiscuous mode, the filtering of packets is implemented in the code based on the IP addresses and port.
+2.	The IP table is morphed so that Reset message is not sent to the server if the data is received which may bypass the TCP stack built in the kernel.
+3.	The congestion window is initiated as one and incremented in every iteration, after it reaches its threshold, its cut down to one.
+4.	The sequence numbers of the incoming data are kept on track and they are used to align the data if received unordered.
+5.	In the process of execution, if the data is not received within 60 seconds, the previous ack or data is retransmitted. If the timeout reaches 180 seconds, the program is terminated.
+
+Challenges Faced:
+1.	The total length in the IP header has to implemented now as the kernel will not calculate it automatically after the implementation of ethernet command[Extra Credit].
+2.	The Checksum calculation when the data is of odd length was a difficulty faced.
+3.	The concept behind packing and unpacking of the headers.
+4.	 
+
+Test Cases:
+Test 1.	If the URL is not passed: This case is handled using the error message created by system arguments.
+	Result: Pass
+	Comment displayed: Program accepts only 1 arguement
+Test 2.	If the URL passed is not correct: A check has been performed with the syntax and format of general URL, another search has been performed by fetching the IP address of the URL. If any of these two checks is failed, an error is thrown out.
+	Result: Pass
+	Comment displayed: The format of the given URL is invalid
+Test 3.	If the packing/unpacking of data is interrupted: This case arises if a different type of value is passed in packing or unpacking of headers. This will raise a struct error which prints an output and exits the program.
+	Result: Pass
+	Comment displayed:Improper arguments passes while packing or unpacking of data-Please try again
+Test 4.	If there no packet recieved in aperiod of 180 seconds the programs exits 
+	Result: Pass
+Test 5.	Validation of content of the file is done using wget
+	Result: Pass
+	Comment: output of the "diff" command should not geve any output or the md5sum check on both the files should give same hash function.
+Test 7.	Handling of Socket errors
+	Result: Pass
+	Comment displayed: A unknown socket error has occured-Please try again
+Test 8. Stress test: the program should handle if the file to be downloaded in too large.
+	Result: Pass
+
+
+
+
+
+
+
+
